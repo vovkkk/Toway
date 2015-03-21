@@ -22,7 +22,7 @@ class MyWindow(QMainWindow):
         self.resize(self.QSETTINGS.value('size', QSize(300, 500)).toSize())
         self.move(self.QSETTINGS.value('pos', QPoint(50, 50)).toPoint())
         self.setWindowTitle('Toway')
-        self.setWindowIcon(QIcon('feather.png'))
+        self.setWindowIcon(QIcon('icons/swap.svg'))
 
         m = QWidget()
         self.setCentralWidget(m)
@@ -30,30 +30,41 @@ class MyWindow(QMainWindow):
         layout.setContentsMargins(0,0,0,0)
         m.setLayout(layout)
 
-        self.tasks = {}
+        self.tasks, self.stats = {}, {}
 
-        lv = QListWidget()
-        layout.addWidget(lv)
-        # print(lv.font().family())
-        lv.setItemDelegate(MyDelegate(lv, lv.font().family()))
-        self.lv = lv
+        tasks_list = QListWidget()
+        layout.addWidget(tasks_list)
+        # print(tasks_list.font().family())
+        tasks_list.setItemDelegate(MyDelegate(tasks_list, tasks_list.font().family()))
+        self.tasks_list = tasks_list
+
+        self.files_list = QListWidget()
+        layout.addWidget(self.files_list)
+        self.files_list.setItemDelegate(MyDelegate(self.files_list, tasks_list.font().family()))
+        self.files_list.hide()
 
         files = self.FILES
+        self.hint = QLabel(u'<br><br><br><center><img src="icons/drop.png"><br><br><big>Drop<br>some <b>file(s)</b><br>here!</big></center><br>')
         if not files:
-            self.hint = QLabel(u'<br><br><br><center><big>Drop some <b>file(s)</b> here!</big></center>')
             layout.addWidget(self.hint)
-            self.lv.hide()
+            # self.tasks_list.hide()
         for f in files:
             self.retrieve_stuff(f)
 
         self.w = QFileSystemWatcher(files)
         self.w.fileChanged.connect(lambda p: self.report(p))
 
-        self.lv.itemPressed.connect(lambda n: self.goto_line(n))
-        self.lv.itemActivated.connect(lambda n: self.goto_line(n))
+        self.tasks_list.itemPressed.connect(lambda n: self.goto_line(n))
+        self.tasks_list.itemActivated.connect(lambda n: self.goto_line(n))
+        self.files_list.itemPressed.connect(lambda n: self.goto_line(n))
+        self.files_list.itemActivated.connect(lambda n: self.goto_line(n))
 
-        self.setStyleSheet('QListWidget{border:0px}')
+        self.setStyleSheet('QListWidget{border:0px}'
+                           'QToolBar{border: 0px; margin: 5px; spacing: 5px}'
+                           'QPushButton{padding: 5px 10px}')
         self.setAcceptDrops(True)
+
+        self.create_toolbar()
 
     def dragEnterEvent(self, event): event.accept()
 
@@ -70,7 +81,7 @@ class MyWindow(QMainWindow):
         self.w.removePaths(files)
         self.w.addPaths(files)
         if files:
-            self.lv.show()
+            self.tasks_list.show()
             self.hint.hide()
 
     def report(self, path):
@@ -84,39 +95,89 @@ class MyWindow(QMainWindow):
         try:
             with io.open(path, 'r', encoding='utf8') as p:
                 self.tasks.update({path: {}})
+                self.stats.update({path: {'pending': 0, 'important': 0}})
+                pending = important = 0
                 for i, line in enumerate(p, start=1):
-                    if u'☐' in line and '@today' in line:
-                        self.tasks.get(path).update({str(i): line.replace(' @today', '').lstrip(u' ☐').rstrip(' \n')})
+                    if u'☐' in line:
+                        pending += 1
+                        self.stats.get(path).update(pending=pending)
+                        if'@today' in line:
+                            important += 1
+                            self.stats.get(path).update(important=important)
+                            self.tasks.get(path).update({str(i): line.replace(' @today', '').lstrip(u' ☐').rstrip(' \n')})
         except Exception as e:
             return 'todo: notify that file cant be read'
         else:
             self.generate_list()
 
     def generate_list(self):
+        # TODO: bring part of self.show_files here
         # print(self.tasks.items())
         if len(self.tasks) != len(self.FILES):
             return
-        self.lv.clear()
+        self.tasks_list.clear()
         for f in self.FILES:
             # print(type(f))
             for n, t in self.tasks.get(f).items():
-                item = QListWidgetItem();
+                item = QListWidgetItem()
                 item.setData(Qt.DisplayRole, t)
                 item.setData(Qt.UserRole + 1, n)
                 item.setData(Qt.UserRole + 2, f)
-                item.setToolTip(f)
-                self.lv.addItem(item)
+                item.setToolTip(u'<br>  line {0} in {2}<br><br>{1}<br>  '.format(n, *os.path.split(os.path.normpath(f))))
+                self.tasks_list.addItem(item)
 
     def goto_line(self, item):
         fn = unicode(item.data(Qt.UserRole + 2).toString()).encode(locale.getpreferredencoding())
         ln = unicode(item.data(Qt.UserRole + 1).toString()).encode(locale.getpreferredencoding())
         # print(fn, ln, type(fn))
+        if ',' in ln:
+            ln = 0
         try:
             subprocess.Popen(['subl', u'%s:%s' % (fn, ln)])
         except:
             subprocess.Popen(['sublime_text', '%s:%s' % (fn, ln)])
         else:
             return 'todo: error'
+
+    def create_toolbar(self):
+        self.toolbar = QToolBar()
+        self.toolbar.setMovable(False)
+        spacerl = QWidget()
+        spacerl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        spacerr = QWidget()
+        spacerr.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.tasks_btn = QPushButton(QIcon('icons/bookmarks.svg'), '')
+        self.tasks_btn.setToolTip('Tasks')
+        self.tasks_btn.pressed.connect(self.show_tasks)
+
+        self.files_btn = QPushButton(QIcon('icons/documents.svg'), '')
+        self.files_btn.setToolTip('Files')
+        self.files_btn.pressed.connect(self.show_files)
+
+        # self.filter_btn   = QPushButton('Filter')
+        # self.settings_btn = QPushButton('Settings')
+        # for b in (spacerl, self.tasks_btn, self.files_btn, self.filter_btn, self.settings_btn, spacerr):
+        for b in (spacerl, self.tasks_btn, self.files_btn, spacerr):
+            self.toolbar.addWidget(b)
+        self.addToolBar(0x4, self.toolbar)
+
+    def show_tasks(self):
+        self.files_list.hide()
+        self.tasks_list.show()
+
+    def show_files(self):
+        self.tasks_list.hide()
+        self.files_list.clear()
+        for f in sorted(self.FILES):
+            fn = os.path.split(f)[1].split('.')
+            item = QListWidgetItem()
+            item.setData(Qt.DisplayRole, fn[0])
+            item.setData(Qt.UserRole + 1, str(self.stats.get(f)['important']) + ' out of ' + str(self.stats.get(f)['pending']) + ', ' + '.'.join(fn[1:]))
+            item.setData(Qt.UserRole + 2, f)
+            item.setToolTip(os.path.normpath(f))
+            self.files_list.addItem(item)
+        self.files_list.show()
 
     def closeEvent(self, QCloseEvent):
         self.QSETTINGS.setValue('size', self.size())

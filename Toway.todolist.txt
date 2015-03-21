@@ -2,47 +2,52 @@ Settings:
   ☐ call an update on change if need
 
 Tasks:
-  ☐ improve update so only necessary items would be updated
+  ☐ improve update so only necessary items would be updated @important
       currently it re-creates the entire list
-  ☐ put source file path in item’s tool-tip @bug
-      done, but tooltip doesn’t follow cursor if items have same tooltip value
-  ☐ consider to hide line numbers at some point?
-  ☐ all pending bullets
+  ☐ show tags on second line instead of line number
+  ☐ all pending bullets @today
   ☐ sorting
   ☐ calc&set correct sizeHint
       height==40px is *bad* due to diff./custom font-sizes on diff. OSs
       weight==-1   is *okay* to avoid horizontal scrollbar
 
 Tags:
-  ☐ support many tags
+  ☐ support many tags @today
       need to add settings window
-      show stripped tags in tool-tip
   ☐ filtering
       drop-down list with check-boxes to hide/show items with certain tag(s)
   ☐ notifications for @due(date)
 
-Filelist: @high-priority
-  one more list to display files are being watched
-  main concern is how to do it: tabs? tool box? tool buttons?
-  buttons seems easier to customise
-  besides, there will be button for settings, so all elements would be buttons
+Filelist:
+  ☐ drg&drop while file_list is visible shows both lists @bug
+  ☐ ability to remove file
+  ☐ update amounts of tasks
   ☐ add check-boxes to disable watching a file w/o remove it from settings file
       some way to check/uncheck all, uncheck all except one (or something)
       thus files become dict instead of list
           {'path1': true, 'path2': false}
-  ☐ obv. open file on click
 
 Misc:
   ☐ errors reports
-      im thinking about Firefox console
-      in case of errors window (status-bar?) get some red icon with number
-      so user may ignore it or click it to see a new window with list of errors
+      set red icon with number on filelist button and show errors inline in appropriate item(s)
       e.g. some file doesn’t exist any-more or couldn’t be read because permissions
       it also could suggest some actions, e.g. click button to remove file from settings or open parent folder in Explorer
   ☐ ¿search/filter task&file lists?
   ☐ help should explain unclear moments + about
   ☐ helpful ¿and maybe funny? place-holders for empty lists
   ☐ ¿cache tasks so if file(s) remain unchanged app won’t read them again on start-up?
-  ☐ better UI, e.g. colourful tags on each item or different backgrounds
+  ☐ better UI, e.g. colourful tags on each item or different backgrounds, overlay scroll bars
   ☐ create tasks within the app, some sort of ‘Inbox’
   ☐ edit w/o switching to ST, this is probably hardest to do
+  ☐ ¿ moto: «[organize|control|navigate|review] your plain-text to-dos in sensible way» ?
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+Archive:
+  ✔ put source file path in item’s tool-tip @bug @project(Tasks)
+    done, but tooltip doesn’t follow cursor if items have same tooltip value
+    unique tooltip for each item hides the issue somewhat, thus consider it is fixed
+  ✔ open file on click @project(Filelist)
+  ✔ one more list to display files are being watched @project(Filelist)
+    main concern is how to do it: tabs? tool box? tool buttons?
+    buttons seems easier to customise
+    besides, there will be button for settings, so all elements would be buttons

@@ -36,5 +36,5 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 
 <hr>
 
-### Entypo under [CC BY-SA](http://creativecommons.org/licenses/by-sa/2.0/)
-© 2012 Daniel Bruce <http://www.entypo.com>
+### Entypo+ under [CC BY-SA](http://creativecommons.org/licenses/by-sa/4.0/)
+© 2015 Daniel Bruce <http://www.entypo.com>
