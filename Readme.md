@@ -1,8 +1,7 @@
 # Toway
-This is probably one of the weirdest apps out there — aggregation of certain tasks from file(s) in plain-text format.  
-It have been created with [PlainTasks](https://github.com/aziz/PlainTasks#plaintasks) in mind.
+Aggregation of certain tasks from file(s) in plain-text format — reduce noize to see only important stuff, and quickly open file at corresponding line in Sublime Text to see context or edit; list updates automatically as soon as you save file.
 
-Basically, the idea is to get a destruction-free list which answer the question _what I gotta do today?_ 
+It has been created with [PlainTasks](https://github.com/aziz/PlainTasks#plaintasks) in mind; all kinds of bullets are supported including [TaskPaper](http://www.hogbaysoftware.com/products/taskpaper) style.
 
 [Click here to watch animated demo of how it works](toway-demo.gif)
 
@@ -19,7 +18,7 @@ Currently Toway is in supposedly-active development so it might be not really co
 it supports  
 
 * monitoring many files at once (drag&drop to add them into app)
-* only one tag at once (`@today`)
+* look for many tags (list of tags is hardcode in script, you can modify it)
 
 and that’s it.
 

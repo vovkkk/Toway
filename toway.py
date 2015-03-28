@@ -8,6 +8,14 @@ try: # separate icon in the Windows dock
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Toway')
 except: pass
 
+TASK   = re.compile(ur'(?ixu)^\s*(-|❍|❑|■|□|☐|▪|▫|–|—|\[\s\])(\s+.*)')
+IGNORE = ['@done', '@cancelled', '@canceled']
+TAGS   = ['@today', '@important', '@critical', '@bug']
+
+PATH = Qt.UserRole + 2
+LINE = Qt.UserRole + 3
+
+
 class MyWindow(QMainWindow):
     @property
     def FILES(self):
@@ -98,13 +106,19 @@ class MyWindow(QMainWindow):
                 self.stats.update({path: {'pending': 0, 'important': 0}})
                 pending = important = 0
                 for i, line in enumerate(p, start=1):
-                    if u'☐' in line:
+                    suitable = not any(s in s for s in IGNORE if s in line)
+                    task = TASK.match(line.rstrip(' \n'))
+                    if suitable and task:
                         pending += 1
                         self.stats.get(path).update(pending=pending)
-                        if'@today' in line:
+                        if any(s for s in TAGS if s in line):
                             important += 1
+                            tags_regex = '(%s)' % u'|'.join(TAGS)
+                            text = task.group(2)
+                            task = re.sub(tags_regex, '', text).lstrip().rstrip(' \n')
+                            tags = sorted([t.lstrip('@') for t in re.findall(tags_regex, text)])
                             self.stats.get(path).update(important=important)
-                            self.tasks.get(path).update({str(i): line.replace(' @today', '').lstrip(u' ☐').rstrip(' \n')})
+                            self.tasks.get(path).update({str(i): (task, tags)})
         except Exception as e:
             return 'todo: notify that file cant be read'
         else:
@@ -120,18 +134,17 @@ class MyWindow(QMainWindow):
             # print(type(f))
             for n, t in self.tasks.get(f).items():
                 item = QListWidgetItem()
-                item.setData(Qt.DisplayRole, t)
-                item.setData(Qt.UserRole + 1, n)
-                item.setData(Qt.UserRole + 2, f)
-                item.setToolTip(u'<br>  line {0} in {2}<br><br>{1}<br>  '.format(n, *os.path.split(os.path.normpath(f))))
+                item.setData(Qt.DisplayRole, t[0])
+                item.setData(Qt.UserRole + 1, '%s' % u', '.join(t[1]))
+                item.setData(PATH, f)
+                item.setData(LINE, n)
+                item.setToolTip(u'<br>{0}<br><br>line {1} in {3}<br>{2}<br>'.format(t[0], n, *os.path.split(os.path.normpath(f))))
                 self.tasks_list.addItem(item)
 
     def goto_line(self, item):
-        fn = unicode(item.data(Qt.UserRole + 2).toString()).encode(locale.getpreferredencoding())
-        ln = unicode(item.data(Qt.UserRole + 1).toString()).encode(locale.getpreferredencoding())
+        fn = unicode(item.data(PATH).toString()).encode(locale.getpreferredencoding())
+        ln = unicode(item.data(LINE).toString()).encode(locale.getpreferredencoding())
         # print(fn, ln, type(fn))
-        if ',' in ln:
-            ln = 0
         try:
             subprocess.Popen(['subl', u'%s:%s' % (fn, ln)])
         except:
@@ -174,7 +187,8 @@ class MyWindow(QMainWindow):
             item = QListWidgetItem()
             item.setData(Qt.DisplayRole, fn[0])
             item.setData(Qt.UserRole + 1, str(self.stats.get(f)['important']) + ' out of ' + str(self.stats.get(f)['pending']) + ', ' + '.'.join(fn[1:]))
-            item.setData(Qt.UserRole + 2, f)
+            item.setData(PATH, f)
+            item.setData(LINE, 0)
             item.setToolTip(os.path.normpath(f))
             self.files_list.addItem(item)
         self.files_list.show()
