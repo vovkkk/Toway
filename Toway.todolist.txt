@@ -5,9 +5,6 @@ Tasks:
   ☐ improve update so only necessary items would be updated @important
       currently it re-creates the entire list
   ☐ sorting
-  ☐ calc&set correct sizeHint
-      height==40px is *bad* due to diff./custom font-sizes on diff. OSs
-      weight==-1   is *okay* to avoid horizontal scrollbar
 
 Tags:
   ☐ add/remove tags @today
@@ -41,6 +38,9 @@ Misc:
 
 ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
 Archive:
+  ✔ calc&set correct sizeHint @project(Tasks)
+    height==40px is *bad* due to diff./custom font-sizes on diff. OSs
+    weight==-1   is *okay* to avoid horizontal scrollbar
   ✔ show tags on second line instead of line number @project(Tasks)
   ✔ take many tags at once @project(Tags)
   ✔ all pending bullets @project(Tasks)

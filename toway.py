@@ -43,12 +43,12 @@ class MyWindow(QMainWindow):
         tasks_list = QListWidget()
         layout.addWidget(tasks_list)
         # print(tasks_list.font().family())
-        tasks_list.setItemDelegate(MyDelegate(tasks_list, tasks_list.font().family()))
+        tasks_list.setItemDelegate(MyDelegate(tasks_list))
         self.tasks_list = tasks_list
 
         self.files_list = QListWidget()
         layout.addWidget(self.files_list)
-        self.files_list.setItemDelegate(MyDelegate(self.files_list, tasks_list.font().family()))
+        self.files_list.setItemDelegate(MyDelegate(self.files_list))
         self.files_list.hide()
 
         files = self.FILES
@@ -77,10 +77,9 @@ class MyWindow(QMainWindow):
     def dragEnterEvent(self, event): event.accept()
 
     def dropEvent(self, event):
-        fn = event.mimeData().urls()[0].toLocalFile().toLocal8Bit().data()
         files = self.FILES
         for uri in event.mimeData().urls():
-            fn = unicode(uri.toLocalFile().toLocal8Bit().data(), locale.getpreferredencoding())
+            fn = unicode(uri.toLocalFile().toUtf8().data(), 'utf8')
             if fn not in files and os.path.isfile(fn):
                 files.append(fn)
         self.QSETTINGS.setValue('files', files)
@@ -94,7 +93,7 @@ class MyWindow(QMainWindow):
 
     def report(self, path):
         self.w.removePaths(self.FILES)
-        self.retrieve_stuff(unicode(path))
+        self.retrieve_stuff(path)
         self.w.addPaths(self.FILES)
 
     def retrieve_stuff(self, path):
@@ -115,7 +114,7 @@ class MyWindow(QMainWindow):
                             important += 1
                             tags_regex = '(%s)' % u'|'.join(TAGS)
                             text = task.group(2)
-                            task = re.sub(tags_regex, '', text).lstrip().rstrip(' \n')
+                            task = re.sub(tags_regex, '', text).strip(' \n')
                             tags = sorted([t.lstrip('@') for t in re.findall(tags_regex, text)])
                             self.stats.get(path).update(important=important)
                             self.tasks.get(path).update({str(i): (task, tags)})
@@ -186,7 +185,7 @@ class MyWindow(QMainWindow):
             fn = os.path.split(f)[1].split('.')
             item = QListWidgetItem()
             item.setData(Qt.DisplayRole, fn[0])
-            item.setData(Qt.UserRole + 1, str(self.stats.get(f)['important']) + ' out of ' + str(self.stats.get(f)['pending']) + ', ' + '.'.join(fn[1:]))
+            item.setData(Qt.UserRole + 1, u'%d out of %d, %s' % (self.stats.get(f)['important'], self.stats.get(f)['pending'], u'.'.join(fn[1:])))
             item.setData(PATH, f)
             item.setData(LINE, 0)
             item.setToolTip(os.path.normpath(f))
@@ -202,28 +201,34 @@ class MyWindow(QMainWindow):
 class MyDelegate(QStyledItemDelegate):
     def __init__(self, parent=None, *args):
         QStyledItemDelegate.__init__(self, parent)
-        self.font = u'%s' % args
 
     def paint(self, painter, option, index):
+        u'''adjusted(
+                 left margin   == font height e.g. 15px,
+                 top margin    == ⅓ font height,
+                 right margin does not matter e.g. -10px,
+                 bottom margin == -(top one [+ offset for second line])
+                 )
+        let offset between 1st & 2nd rows be height/5
+        if height=15 then item = 5 + 15 + 3 + 15 + 5 = 43
+        '''
         QApplication.style().drawControl(QStyle.CE_ItemViewItem, option, painter, QListWidget())
+        h = QFontMetrics(option.font).height()
         painter.save()
-
         title = index.data(Qt.DisplayRole).toString()
-        r = option.rect.adjusted(15, 0, -10, -20);
-        # painter.setFont(QFont(self.font, 0, QFont.DemiBold))
+        r = option.rect.adjusted(h, h/3, -10, -(h+h/5+h/3))
         painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignBottom|Qt.AlignLeft, title)
 
         descr = index.data(Qt.UserRole + 1).toString()
-        r = option.rect.adjusted(15, 20, -10, 0);
-        # painter.setFont(QFont(self.font, 0, QFont.Light))
-        # painter.setFont(QApplication.font())
+        r = option.rect.adjusted(h, h+h/5+h/3, -10, h/3);
         painter.setOpacity(0.25)
         painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignLeft, descr)
 
         painter.restore()
 
     def sizeHint(self, option, index):
-        return QSize(-1, 40)
+        h = QFontMetrics(option.font).height()
+        return QSize(-1, h*2 + h/5 + h*2/3)
 
 
 def main():
