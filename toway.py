@@ -1,5 +1,7 @@
 # coding: utf8
 import sys, io, re, os, subprocess, locale
+import sip  # make Qt API return normal unicode type instead of QString type
+sip.setapi('QString', 2)
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
@@ -7,6 +9,7 @@ try: # separate icon in the Windows dock
     import ctypes
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Toway')
 except: pass
+
 
 TASK   = re.compile(ur'(?ixu)^\s*(-|❍|❑|■|□|☐|▪|▫|–|—|\[\s\])(\s+.*)')
 IGNORE = ['@done', '@cancelled', '@canceled']
@@ -19,7 +22,7 @@ LINE = Qt.UserRole + 3
 class MyWindow(QMainWindow):
     @property
     def FILES(self):
-        return [unicode(f) for f in self.QSETTINGS.value('files', []).toPyObject()]
+        return self.QSETTINGS.value('files', []).toPyObject()
 
     @property
     def QSETTINGS(self):
@@ -79,7 +82,7 @@ class MyWindow(QMainWindow):
     def dropEvent(self, event):
         files = self.FILES
         for uri in event.mimeData().urls():
-            fn = unicode(uri.toLocalFile().toUtf8().data(), 'utf8')
+            fn = uri.toLocalFile()
             if fn not in files and os.path.isfile(fn):
                 files.append(fn)
         self.QSETTINGS.setValue('files', files)
@@ -98,6 +101,7 @@ class MyWindow(QMainWindow):
 
     def retrieve_stuff(self, path):
         if not os.path.exists(path):
+            print('not exist', path)
             return 'todo: notify that file disappeared'
         try:
             with io.open(path, 'r', encoding='utf8') as p:
@@ -119,6 +123,7 @@ class MyWindow(QMainWindow):
                             self.stats.get(path).update(important=important)
                             self.tasks.get(path).update({str(i): (task, tags)})
         except Exception as e:
+            print('fail to read', str(e), path)
             return 'todo: notify that file cant be read'
         else:
             self.generate_list()
