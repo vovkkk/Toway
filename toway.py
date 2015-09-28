@@ -5,7 +5,7 @@ sip.setapi('QString', 2)
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
-try: # separate icon in the Windows dock
+try:  # separate icon in the Windows dock
     import ctypes
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Toway')
 except: pass
@@ -14,6 +14,21 @@ except: pass
 TASK   = re.compile(ur'(?ixu)^\s*(-|❍|❑|■|□|☐|▪|▫|–|—|\[\s\])(\s+.*)')
 IGNORE = ['@done', '@cancelled', '@canceled']
 TAGS   = ['@today', '@important', '@critical', '@bug']
+TAGS_REGEX = '(?<=\s)\@(?![\s\(])[\w\d\.\(\)\-!? :\+]+[ \t]*'
+DRAW_TAGS = [t.lstrip('@') for t in TAGS]
+
+# tag: [background, font opacity]; background = (r, g, b, a)
+COLOURS = {'today':     [(0,   177,  89,  99), 0.5],   # green
+           'important': [(243, 119,  53, 155), 0.5],   # orange
+           'critical':  [(209,  17,  65, 255), 0.5],   # red
+           'bug':       [(114,   0, 172,  99), 0.5]}   # violet
+'''
+other good colours
+    37, 115, 236    blue
+    0, 174, 219     light blue
+    236, 9, 140     pink
+    255, 196, 37    yellow
+'''
 
 PATH = Qt.UserRole + 2
 LINE = Qt.UserRole + 3
@@ -38,7 +53,7 @@ class MyWindow(QMainWindow):
         m = QWidget()
         self.setCentralWidget(m)
         layout = QVBoxLayout()
-        layout.setContentsMargins(0,0,0,0)
+        layout.setContentsMargins(0, 0, 0, 0)
         m.setLayout(layout)
 
         self.tasks, self.stats = {}, {}
@@ -59,10 +74,9 @@ class MyWindow(QMainWindow):
         if not files:
             layout.addWidget(self.hint)
             # self.tasks_list.hide()
-        for f in files:
-            self.retrieve_stuff(f)
 
         self.w = QFileSystemWatcher(files)
+        self.report()
         self.w.fileChanged.connect(lambda p: self.report(p))
 
         self.tasks_list.itemPressed.connect(lambda n: self.goto_line(n))
@@ -94,39 +108,44 @@ class MyWindow(QMainWindow):
             self.tasks_list.show()
             self.hint.hide()
 
-    def report(self, path):
-        self.w.removePaths(self.FILES)
-        self.retrieve_stuff(path)
-        self.w.addPaths(self.FILES)
-
-    def retrieve_stuff(self, path):
-        if not os.path.exists(path):
-            print('not exist', path)
-            return 'todo: notify that file disappeared'
+    def report(self, path=None):
+        files = self.FILES
+        self.w.removePaths(files)
         try:
-            with io.open(path, 'r', encoding='utf8') as p:
-                self.tasks.update({path: {}})
-                self.stats.update({path: {'pending': 0, 'important': 0}})
-                pending = important = 0
-                for i, line in enumerate(p, start=1):
-                    suitable = not any(s in s for s in IGNORE if s in line)
-                    task = TASK.match(line.rstrip(' \n'))
-                    if suitable and task:
-                        pending += 1
-                        self.stats.get(path).update(pending=pending)
-                        if any(s for s in TAGS if s in line):
-                            important += 1
-                            tags_regex = '(%s)' % u'|'.join(TAGS)
-                            text = task.group(2)
-                            task = re.sub(tags_regex, '', text).strip(' \n')
-                            tags = sorted([t.lstrip('@') for t in re.findall(tags_regex, text)])
-                            self.stats.get(path).update(important=important)
-                            self.tasks.get(path).update({str(i): (task, tags)})
+            if path:
+                self.retrieve_stuff(path)
+            else:
+                for f in files:
+                    self.retrieve_stuff(f)
         except Exception as e:
             print('fail to read', str(e), path)
             return 'todo: notify that file cant be read'
         else:
             self.generate_list()
+        self.w.addPaths(files)
+
+    def retrieve_stuff(self, path):
+        if not os.path.isfile(path):
+            print('not exist', path)
+            return 'todo: notify that file disappeared'
+        with io.open(path, 'r', encoding='utf8') as p:
+            self.tasks.update({path: {}})
+            self.stats.update({path: {'pending': 0, 'important': 0}})
+            pending = important = 0
+            for i, line in enumerate(p, start=1):
+                suitable = not any(s in s for s in IGNORE if s in line)
+                task = TASK.match(line.rstrip(' \n'))
+                if suitable and task:
+                    pending += 1
+                    self.stats.get(path).update(pending=pending)
+                    if any(s for s in TAGS if s in line):
+                        important += 1
+                        # tags_regex = '(%s)' % u'|'.join(TAGS)
+                        text = task.group(2)
+                        task = re.sub(TAGS_REGEX, '', text).strip(' \n')
+                        tags = sorted([t.strip('@ ') for t in re.findall(TAGS_REGEX, text)])
+                        self.stats.get(path).update(important=important)
+                        self.tasks.get(path).update({str(i): (task, text, tags)})
 
     def generate_list(self):
         # TODO: bring part of self.show_files here
@@ -137,12 +156,13 @@ class MyWindow(QMainWindow):
         for f in self.FILES:
             # print(type(f))
             for n, t in self.tasks.get(f).items():
+                task, text, tags = t
                 item = QListWidgetItem()
-                item.setData(Qt.DisplayRole, t[0])
-                item.setData(Qt.UserRole + 1, '%s' % u', '.join(t[1]))
+                item.setData(Qt.DisplayRole, task)
+                item.setData(Qt.UserRole + 1, '%s' % u'\v'.join(tags))
                 item.setData(PATH, f)
                 item.setData(LINE, n)
-                item.setToolTip(u'<br>{0}<br><br>line {1} in {3}<br>{2}<br>'.format(t[0], n, *os.path.split(os.path.normpath(f))))
+                item.setToolTip(u'<br>{0}<br><br>line {1} in {3}<br>{2}<br>'.format(text, n, *os.path.split(os.path.normpath(f))))
                 self.tasks_list.addItem(item)
 
     def goto_line(self, item):
@@ -172,9 +192,9 @@ class MyWindow(QMainWindow):
         self.files_btn.setToolTip('Files')
         self.files_btn.pressed.connect(self.show_files)
 
-        # self.filter_btn   = QPushButton('Filter')
+        # self.tags_btn     = QPushButton('@')
         # self.settings_btn = QPushButton('Settings')
-        # for b in (spacerl, self.tasks_btn, self.files_btn, self.filter_btn, self.settings_btn, spacerr):
+        # for b in (spacerl, self.tasks_btn, self.files_btn, self.tags_btn, self.settings_btn, spacerr):
         for b in (spacerl, self.tasks_btn, self.files_btn, spacerr):
             self.toolbar.addWidget(b)
         self.addToolBar(0x4, self.toolbar)
@@ -217,17 +237,30 @@ class MyDelegate(QStyledItemDelegate):
         let offset between 1st & 2nd rows be height/5
         if height=15 then item = 5 + 15 + 3 + 15 + 5 = 43
         '''
+        FONT = option.font
         QApplication.style().drawControl(QStyle.CE_ItemViewItem, option, painter, QListWidget())
-        h = QFontMetrics(option.font).height()
+        h = QFontMetrics(FONT).height()
         painter.save()
         title = index.data(Qt.DisplayRole).toString()
         r = option.rect.adjusted(h, h/3, -10, -(h+h/5+h/3))
-        painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignBottom|Qt.AlignLeft, title)
+        painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignBottom | Qt.AlignLeft, title)
 
-        descr = index.data(Qt.UserRole + 1).toString()
-        r = option.rect.adjusted(h, h+h/5+h/3, -10, h/3);
-        painter.setOpacity(0.25)
-        painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignLeft, descr)
+        tags = index.data(Qt.UserRole + 1).toString().split('\v')
+        offset = h
+        for tag in tags:
+            if tag in DRAW_TAGS:
+                colour, opacity = COLOURS.get(tag, [option.backgroundBrush, 0.5])
+                painter.setBackgroundMode(1)
+                painter.setBackground(QColor(*colour))
+                painter.setOpacity(opacity)
+                tag = u' %s ' % tag
+            else:
+                painter.setBackgroundMode(0)
+                painter.setOpacity(0.25)
+            width = h + QFontMetrics(FONT).width(tag)
+            r = option.rect.adjusted(offset, h+h/5+h/3, width, h/3)
+            painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignLeft, tag)
+            offset += width
 
         painter.restore()
 

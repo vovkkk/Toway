@@ -5,6 +5,7 @@ It has been created with [PlainTasks](https://github.com/aziz/PlainTasks#plainta
 
 [Click here to watch animated demo of how it works](toway-demo.gif)
 
+![](https://cloud.githubusercontent.com/assets/1975298/10135507/64dc6a24-6610-11e5-94d5-b8d0ac84bb6d.png)
 
 ## Requirements
 * [Python](https://www.python.org/downloads/) 2.7
