@@ -17,21 +17,32 @@ TAGS   = ['@today', '@important', '@critical', '@bug']
 TAGS_REGEX = '(?<=\s)\@(?![\s\(])[\w\d\.\(\)\-!? :\+]+[ \t]*'
 DRAW_TAGS = [t.lstrip('@') for t in TAGS]
 
-# tag: [background, font opacity]; background = (r, g, b, a)
+'''tag: [background, font opacity]; background = (r, g, b, a)'''
 COLOURS = {'today':     [(0,   177,  89,  99), 0.5],   # green
            'important': [(243, 119,  53, 155), 0.5],   # orange
            'critical':  [(209,  17,  65, 255), 0.5],   # red
            'bug':       [(114,   0, 172,  99), 0.5]}   # violet
-'''
-other good colours
+'''other good colours
     37, 115, 236    blue
     0, 174, 219     light blue
     236, 9, 140     pink
     255, 196, 37    yellow
 '''
 
+# data roles for item data, used to open in ST on click item
 PATH = Qt.UserRole + 2
 LINE = Qt.UserRole + 3
+
+'''data of each item has 4 roles, we shall set (item data is kinda like dictionary in Python http://pyqt.sourceforge.net/Docs/PyQt4/qt.html#ItemDataRole-enum):
+    visible in main ui
+        1. DisplayRole   title, task text without tags in tasklist,
+                    or   filename without extension in filelist
+        2. UserRole + 1  all tags as one string, separated by \v in tasklist,
+                    or   amount of tasks and extension in filelist
+    visible in tooltip
+        3. PATH          file path which contains the task
+        4. LINE          1-based line number of task, always 0 in filelist to preserve selection(s) if file was already open
+'''
 
 
 class MyWindow(QMainWindow):
@@ -153,28 +164,35 @@ class MyWindow(QMainWindow):
         if len(self.tasks) != len(self.FILES):
             return
         self.tasks_list.clear()
+        count_tasks = 0
         for f in self.FILES:
             # print(type(f))
             for n, t in self.tasks.get(f).items():
+                count_tasks += 1
                 task, text, tags = t
                 item = QListWidgetItem()
                 item.setData(Qt.DisplayRole, task)
                 item.setData(Qt.UserRole + 1, '%s' % u'\v'.join(tags))
                 item.setData(PATH, f)
                 item.setData(LINE, n)
-                item.setToolTip(u'<br>{0}<br><br>line {1} in {3}<br>{2}<br>'.format(text, n, *os.path.split(os.path.normpath(f))))
+                item.setData(Qt.ToolTipRole, u'<br>{0}<br><br>line {1} in {3}<br>{2}<br>'.format(text, n, *os.path.split(os.path.normpath(f))))
                 self.tasks_list.addItem(item)
+        if count_tasks:
+            self.setWindowTitle('Toway (%d)' % count_tasks)
+        else:
+            self.setWindowTitle('Toway')
 
     def goto_line(self, item):
-        fn = unicode(item.data(PATH).toString()).encode(locale.getpreferredencoding())
-        ln = unicode(item.data(LINE).toString()).encode(locale.getpreferredencoding())
+        fn = item.data(PATH).toString()
+        ln = item.data(LINE).toString()
         # print(fn, ln, type(fn))
-        try:
-            subprocess.Popen(['subl', u'%s:%s' % (fn, ln)])
-        except:
-            subprocess.Popen(['sublime_text', '%s:%s' % (fn, ln)])
-        else:
-            return 'todo: error'
+        args = [u'%s:%s' % (fn, ln)]
+        caller = QProcess()
+        status = caller.execute('subl', args)
+        if status < 0:
+            status = caller.execute('sublime_text', args)
+            if status < 0:
+                QMessageBox.critical(self, 'Sublime Text is not in system PATH', 'To make it work, ensure that Sublime Text is in PATH,<br>callable by <code>subl</code> or <code>sublime_text</code>.<br><br>Note, .bashrc (and similar) <b>does not change</b> system PATH.')
 
     def create_toolbar(self):
         self.toolbar = QToolBar()
@@ -226,6 +244,12 @@ class MyWindow(QMainWindow):
 class MyDelegate(QStyledItemDelegate):
     def __init__(self, parent=None, *args):
         QStyledItemDelegate.__init__(self, parent)
+        self.FONT = parent.font()
+        self.METRICS = QFontMetrics(self.FONT)
+        self.h = h = self.METRICS.height()
+        self.height = h*2 + h/5 + h*2/3
+        self.external_margin = h/3
+        self.internal_margin = h + h/5 + self.external_margin
 
     def paint(self, painter, option, index):
         u'''adjusted(
@@ -237,16 +261,15 @@ class MyDelegate(QStyledItemDelegate):
         let offset between 1st & 2nd rows be height/5
         if height=15 then item = 5 + 15 + 3 + 15 + 5 = 43
         '''
-        FONT = option.font
         QApplication.style().drawControl(QStyle.CE_ItemViewItem, option, painter, QListWidget())
-        h = QFontMetrics(FONT).height()
         painter.save()
+
         title = index.data(Qt.DisplayRole).toString()
-        r = option.rect.adjusted(h, h/3, -10, -(h+h/5+h/3))
+        r = option.rect.adjusted(self.h, self.external_margin, self.METRICS.width(title), -self.internal_margin)
         painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignBottom | Qt.AlignLeft, title)
 
         tags = index.data(Qt.UserRole + 1).toString().split('\v')
-        offset = h
+        offset = self.h
         for tag in tags:
             if tag in DRAW_TAGS:
                 colour, opacity = COLOURS.get(tag, [option.backgroundBrush, 0.5])
@@ -257,16 +280,15 @@ class MyDelegate(QStyledItemDelegate):
             else:
                 painter.setBackgroundMode(0)
                 painter.setOpacity(0.25)
-            width = h + QFontMetrics(FONT).width(tag)
-            r = option.rect.adjusted(offset, h+h/5+h/3, width, h/3)
+            width = self.h + self.METRICS.width(tag)
+            r = option.rect.adjusted(offset, self.internal_margin, width, self.external_margin)
             painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignLeft, tag)
             offset += width
 
         painter.restore()
 
     def sizeHint(self, option, index):
-        h = QFontMetrics(option.font).height()
-        return QSize(-1, h*2 + h/5 + h*2/3)
+        return QSize(-1, self.height)
 
 
 def main():
