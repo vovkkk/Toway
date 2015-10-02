@@ -14,9 +14,7 @@ Tags:
   ☐ notifications for @due(date)
 
 Filelist:
-  ☐ drag&drop while file_list is visible shows both lists @bug
   ☐ ability to remove file
-  ☐ update amounts of tasks
   ☐ add check-boxes to disable watching a file w/o remove it from settings file
       some way to check/uncheck all, uncheck all except one (or something)
       thus files become dict instead of list
@@ -38,6 +36,9 @@ Misc:
 
 ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
 Archive:
+  ✔ update amounts of tasks @project(Filelist)
+  ✔ drag&drop while file_list is visible shows both lists @bug @project(Filelist)
+  ✔ notify that file cannot be read or disappeared @project(Misc)
   ✔ calc&set correct sizeHint @project(Tasks)
     height==40px is *bad* due to diff./custom font-sizes on diff. OSs
     weight==-1   is *okay* to avoid horizontal scrollbar

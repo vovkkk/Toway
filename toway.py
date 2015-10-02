@@ -1,5 +1,5 @@
 # coding: utf8
-import sys, io, re, os, subprocess, locale
+import sys, io, re, os
 import sip  # make Qt API return normal unicode type instead of QString type
 sip.setapi('QString', 2)
 from PyQt4.QtCore import *
@@ -84,16 +84,16 @@ class MyWindow(QMainWindow):
         self.hint = QLabel(u'<br><br><br><center><img src="icons/drop.png"><br><br><big>Drop<br>some <b>file(s)</b><br>here!</big></center><br>')
         if not files:
             layout.addWidget(self.hint)
-            # self.tasks_list.hide()
+            self.tasks_list.hide()
 
         self.w = QFileSystemWatcher(files)
         self.report()
-        self.w.fileChanged.connect(lambda p: self.report(p))
+        self.w.fileChanged.connect(lambda p: self.report([p]))
 
-        self.tasks_list.itemPressed.connect(lambda n: self.goto_line(n))
-        self.tasks_list.itemActivated.connect(lambda n: self.goto_line(n))
-        self.files_list.itemPressed.connect(lambda n: self.goto_line(n))
-        self.files_list.itemActivated.connect(lambda n: self.goto_line(n))
+        self.tasks_list.itemPressed.connect(self.goto_line)
+        self.tasks_list.itemActivated.connect(self.goto_line)
+        self.files_list.itemPressed.connect(self.goto_line)
+        self.files_list.itemActivated.connect(self.goto_line)
 
         self.setStyleSheet('QListWidget{border:0px}'
                            'QToolBar{border: 0px; margin: 5px; spacing: 5px}'
@@ -111,34 +111,34 @@ class MyWindow(QMainWindow):
             if fn not in files and os.path.isfile(fn):
                 files.append(fn)
         self.QSETTINGS.setValue('files', files)
-        for f in files:
-            self.retrieve_stuff(f)
-        self.w.removePaths(files)
-        self.w.addPaths(files)
         if files:
+            self.report(files)
             self.tasks_list.show()
             self.hint.hide()
+            self.files_list.hide()
+            self.tasks_btn.setEnabled(True)
+            self.files_btn.setEnabled(True)
 
-    def report(self, path=None):
-        files = self.FILES
+    def report(self, paths=None):
+        '''paths list of files (usually just one file) which were changed on filesystem'''
+        files = paths or self.FILES
         self.w.removePaths(files)
+        self.errors = []
+        for f in files:
+            self.try_to_retrieve(f)
+        self.generate_list()
+        self.w.addPaths(files)
+        if self.errors:
+            QMessageBox.critical(self, 'Toway', u'<br><br>'.join(self.errors))
+
+    def try_to_retrieve(self, path):
         try:
-            if path:
-                self.retrieve_stuff(path)
-            else:
-                for f in files:
-                    self.retrieve_stuff(f)
+            self.retrieve_stuff(path)
         except Exception as e:
             print('fail to read', str(e), path)
-            return 'todo: notify that file cant be read'
-        else:
-            self.generate_list()
-        self.w.addPaths(files)
+            self.errors.append(u'%s<br>%s' % (e.strerror, e.filename))
 
     def retrieve_stuff(self, path):
-        if not os.path.isfile(path):
-            print('not exist', path)
-            return 'todo: notify that file disappeared'
         with io.open(path, 'r', encoding='utf8') as p:
             self.tasks.update({path: {}})
             self.stats.update({path: {'pending': 0, 'important': 0}})
@@ -151,7 +151,6 @@ class MyWindow(QMainWindow):
                     self.stats.get(path).update(pending=pending)
                     if any(s for s in TAGS if s in line):
                         important += 1
-                        # tags_regex = '(%s)' % u'|'.join(TAGS)
                         text = task.group(2)
                         task = re.sub(TAGS_REGEX, '', text).strip(' \n')
                         tags = sorted([t.strip('@ ') for t in re.findall(TAGS_REGEX, text)])
@@ -159,28 +158,40 @@ class MyWindow(QMainWindow):
                         self.tasks.get(path).update({str(i): (task, text, tags)})
 
     def generate_list(self):
-        # TODO: bring part of self.show_files here
-        # print(self.tasks.items())
-        if len(self.tasks) != len(self.FILES):
-            return
+        self.files_list.clear()
         self.tasks_list.clear()
-        count_tasks = 0
-        for f in self.FILES:
-            # print(type(f))
-            for n, t in self.tasks.get(f).items():
-                count_tasks += 1
-                task, text, tags = t
-                item = QListWidgetItem()
-                item.setData(Qt.DisplayRole, task)
-                item.setData(Qt.UserRole + 1, '%s' % u'\v'.join(tags))
-                item.setData(PATH, f)
-                item.setData(LINE, n)
-                item.setData(Qt.ToolTipRole, u'<br>{0}<br><br>line {1} in {3}<br>{2}<br>'.format(text, n, *os.path.split(os.path.normpath(f))))
-                self.tasks_list.addItem(item)
+        for f in sorted(self.FILES):
+            self.file_item(f)
+            for n, t in sorted(self.tasks.get(f).items()):
+                self.task_item(f, n, t)
+        self.set_title()
+
+    def set_title(self):
+        count_tasks = sum(len(d) for d in self.tasks.values())
         if count_tasks:
             self.setWindowTitle('Toway (%d)' % count_tasks)
         else:
             self.setWindowTitle('Toway')
+
+    def task_item(self, fpath, linen, task):
+        task, text, tags = task
+        item = QListWidgetItem()
+        item.setData(Qt.DisplayRole, task)
+        item.setData(Qt.UserRole + 1, '%s' % u'\v'.join(tags))
+        item.setData(PATH, fpath)
+        item.setData(LINE, linen)
+        item.setData(Qt.ToolTipRole, u'<br>{0}<br><br>line {1} in {3}<br>{2}<br>'.format(text, linen, *os.path.split(os.path.normpath(fpath))))
+        self.tasks_list.addItem(item)
+
+    def file_item(self, fpath):
+        fn = os.path.split(fpath)[1].split('.')
+        item = QListWidgetItem()
+        item.setData(Qt.DisplayRole, fn[0])
+        item.setData(Qt.UserRole + 1, u'%d out of %d, %s' % (self.stats.get(fpath)['important'], self.stats.get(fpath)['pending'], u'.'.join(fn[1:])))
+        item.setData(PATH, fpath)
+        item.setData(LINE, 0)
+        item.setToolTip(os.path.normpath(fpath))
+        self.files_list.addItem(item)
 
     def goto_line(self, item):
         fn = item.data(PATH).toString()
@@ -188,10 +199,10 @@ class MyWindow(QMainWindow):
         # print(fn, ln, type(fn))
         args = [u'%s:%s' % (fn, ln)]
         caller = QProcess()
-        status = caller.execute('subl', args)
-        if status < 0:
-            status = caller.execute('sublime_text', args)
-            if status < 0:
+        success = caller.startDetached('subl', args)
+        if not success:
+            success = caller.startDetached('sublime_text', args)
+            if not success:
                 QMessageBox.critical(self, 'Sublime Text is not in system PATH', 'To make it work, ensure that Sublime Text is in PATH,<br>callable by <code>subl</code> or <code>sublime_text</code>.<br><br>Note, .bashrc (and similar) <b>does not change</b> system PATH.')
 
     def create_toolbar(self):
@@ -210,9 +221,10 @@ class MyWindow(QMainWindow):
         self.files_btn.setToolTip('Files')
         self.files_btn.pressed.connect(self.show_files)
 
-        # self.tags_btn     = QPushButton('@')
-        # self.settings_btn = QPushButton('Settings')
-        # for b in (spacerl, self.tasks_btn, self.files_btn, self.tags_btn, self.settings_btn, spacerr):
+        if not self.FILES:
+            self.tasks_btn.setDisabled(True)
+            self.files_btn.setDisabled(True)
+
         for b in (spacerl, self.tasks_btn, self.files_btn, spacerr):
             self.toolbar.addWidget(b)
         self.addToolBar(0x4, self.toolbar)
@@ -223,16 +235,6 @@ class MyWindow(QMainWindow):
 
     def show_files(self):
         self.tasks_list.hide()
-        self.files_list.clear()
-        for f in sorted(self.FILES):
-            fn = os.path.split(f)[1].split('.')
-            item = QListWidgetItem()
-            item.setData(Qt.DisplayRole, fn[0])
-            item.setData(Qt.UserRole + 1, u'%d out of %d, %s' % (self.stats.get(f)['important'], self.stats.get(f)['pending'], u'.'.join(fn[1:])))
-            item.setData(PATH, f)
-            item.setData(LINE, 0)
-            item.setToolTip(os.path.normpath(f))
-            self.files_list.addItem(item)
         self.files_list.show()
 
     def closeEvent(self, QCloseEvent):
